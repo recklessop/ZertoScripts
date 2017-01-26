@@ -1,12 +1,12 @@
 ################################################
 # Configure the variables below
 ################################################
-$LogDataDir = "PathToLogDirectory"
-$ESXiHostCSV = "PathTo\VRADeploymentESXiHosts.csv"
-$ZertoServer = "IPAddressOfZVM"
-$ZertoPort = "9669"
-$ZertoUser = Read-Host -Prompt "Enter Username" -AsPlainText
-$ZertoPassword = Read-Host -Prompt "Enter Password for " + $ZertoUser
+$LogDataDir = Read-Host -Prompt "Enter the path to the log directory..."
+$ESXiHostCSV = Read-Host -Prompt "Enter the path to the VRA CSV File, and include the file name..."
+$ZertoServer = Read-Host -Prompt "Enter the IP Address of the ZVM you are deploying to..."
+$ZertoPort = Read-Host -Prompt "Enter the ZVM Port (Usually 9669)..."
+$ZertoUser = Read-Host -Prompt "Enter Username..."
+$ZertoPassword = Read-Host -Prompt "Enter Password..."
 $SecondsBetweenVRADeployments = "120"
 ##################################################################################
 # Nothing to configure below this line - Starting the main function of the script
