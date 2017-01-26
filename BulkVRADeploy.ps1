@@ -5,8 +5,8 @@ $LogDataDir = "PathToLogDirectory"
 $ESXiHostCSV = "PathTo\VRADeploymentESXiHosts.csv"
 $ZertoServer = "IPAddressOfZVM"
 $ZertoPort = "9669"
-$ZertoUser = "account@domain.local"
-$ZertoPassword = "password"
+$ZertoUser = Read-Host -Prompt "Enter Username" -AsPlainText
+$ZertoPassword = Read-Host -Prompt "Enter Password for " + $ZertoUser
 $SecondsBetweenVRADeployments = "120"
 ##################################################################################
 # Nothing to configure below this line - Starting the main function of the script
