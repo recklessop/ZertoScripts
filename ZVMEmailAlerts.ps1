@@ -95,7 +95,7 @@ $peerListApiUrl = "https://" + $strZVMIP + ":"+$strZVMPort+"/v1/alerts"
 #Iterate with JSON:
 $alertListJSON = Invoke-RestMethod -Uri $peerListApiUrl -Headers $zertoSessionHeader
 foreach ($alert in $alertListJSON){
-	if ($alert.Level -eq "Warning")
+	if ($alert.Level -eq "Warning" -Or $alert.Level -eq "Error")
 	{
 	    Write-Host $alert
 	    $vpgAlertAcked = $alert.IsDismissed
