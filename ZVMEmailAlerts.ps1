@@ -8,6 +8,9 @@
 # This script looks for Alerts in ZVM in the "Warning" status and
 # sends an email with relevant information to the administrator.
 #
+# In order to Generate an Encrypted password for the $strZVMPwd field use the passEncrypt.ps1 script, 
+# and paste the data in c:\passwd.txt to the variable.
+#
 # For a list of warnings see this PDF
 # http://s3.amazonaws.com/zertodownload_docs/Latest/Guide%20to%20Alarms,%20Alerts%20and%20Events.pdf
 #
@@ -24,7 +27,12 @@
 $strZVMIP = "172.16.1.20"
 $strZVMPort = "9669"
 $strZVMUser = "myzertousername"
-$strZVMPwd = "myzertopassword"
+$strZVMPwd = "" #run passEncrypt.ps1 on same machine as this script to generate encrypted password then paste into the quotes from c:\passwd.txt
+
+# this code decrypts the password at runtime using the unique system Key. 
+$strZVMPwd = $strZVMPwd | convertto-securestring 
+$strZVMPwd = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($strZVMPwd)
+$strZVMPwd = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($strZVMPwd)
 
 $EmailFrom = "from@jpaul.me"
 $EmailTo = "me@jpaul.me"
@@ -77,8 +85,7 @@ function getxZertoSession ($userName, $password){
     $authInfo = [System.Convert]::ToBase64String($authInfo)
     $headers = @{Authorization=("Basic {0}" -f $authInfo)}
     $contentType = "application/json"
-    $xZertoSessionResponse = Invoke-WebRequest -Uri $xZertoSessionURL -Headers $headers -Method POST -Body $body -ContentType $contentType
-    #$xZertoSessionResponse = Invoke-WebRequest -Uri $xZertoSessionURL -Headers $headers -Body $body -Method POST
+    $xZertoSessionResponse = Invoke-WebRequest -Uri $xZertoSessionURL -Headers $headers -Method POST -ContentType $contentType
     return $xZertoSessionResponse.headers.get_item("x-zerto-session")
 }
 
