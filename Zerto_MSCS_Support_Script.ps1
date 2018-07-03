@@ -1,13 +1,14 @@
 ########################################################################################################################
 # Start of the script - Description, Requirements & Legal Disclaimer
 ########################################################################################################################
-# Written by: Joshua Stenhouse joshua@zerto.com +44 7834 344 838
+# Written by: Joshua Stenhouse virtuallysober.com
+# Updated by: Justin Paul jp@zerto.com
 ################################################
 # Description:
 # Welcome to the Zerto MSCS Cluster Support Script
 # This script is designed for MSCS clusters using shared RDMs where only the active Primary node is protected in a VPG
 # For help in scheduling the PowerShell script consult any example such as the below:
-# https://support.software.dell.com/appassure/kb/144451
+# https://community.spiceworks.com/how_to/17736-run-powershell-scripts-from-task-scheduler
 ################################################ 
 # Requirements:
 # - ZVM ServerName, seperate Usernames and passwords with permission to access the Powershell CMDlets and API of the ZVM
@@ -43,24 +44,24 @@
 # Configure the variables below
 ################################################
 # Step 1. Configure the hostname of both nodes in the Microsoft cluster.
-$node1name = "sql2008server1"
-$node2name = "sql2008server2"
+$node1name = "SQLNodeA"
+$node2name = "SQLNodeB"
 # Step 2. Configure exact name of the cluster service running on the Microsoft cluster. If running multiple services specify the master service upon which all other services are dependant on.
-$sqlclustername = "sql server (MSSQLSERVER)"
+$sqlclustername = "SQL Server (MSSQLSERVER)"
 # Step 3. Configure the name of the VPG in Zerto which is protecting the primary active node. Recommended to not use spaces in the VPG name.
-$node1vpgname = "sql2008server1"
+$node1vpgname = "ClusterNodeA"
 # Step 4. Configure the IP address of the ZVM and the PowerShell login credentials
-$ZVMIP = "192.168.0.116"
-$ZertoUser = "root"
-$ZertoPassword = "Zerto123"
+$ZVMIP = "172.16.1.20"
+$ZertoUser = "administrator"
+$ZertoPassword = "password"
 $ZVMPowerShellPort = "9080"
 # Step 5. Configure the username and password for the ZVM that can login to the ZVM interface, for the API calls to use to get the VPG status
 $ZertoAPIPort = "9669"
-$ZertoAPIUser = "administrator@lab.local"
-$ZertoAPIPassword = "Srt1234!"
+$ZertoAPIUser = "administrator@vsphere.local"
+$ZertoAPIPassword = "mypassword"
 # Step 6. Configure the log file location. This should be accessible to the node running the script at all times, irrespective of cluster owner. A c drive or server share is recommended.
 # Important - create the directory below otherwise the script will fail to run. A check can be added to re-create these if deemed necessary. 
-$loggingfilepath = "C:\Zerto_Scripts\Logs\"
+$loggingfilepath = "C:\Logs\"
 # Step 7. Configure email settings for email alerts, emails will only be sent if a change is made
 $emailto = "test@lab.local"
 $emailfrom = "alert@lab.local"
@@ -83,6 +84,39 @@ add-type @"
     }
 "@
 [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
+############### ignore self signed SSL ##########################
+if (-not ([System.Management.Automation.PSTypeName]'ServerCertificateValidationCallback').Type)
+{
+$certCallback = @"
+    using System;
+    using System.Net;
+    using System.Net.Security;
+    using System.Security.Cryptography.X509Certificates;
+    public class ServerCertificateValidationCallback
+    {
+        public static void Ignore()
+        {
+            if(ServicePointManager.ServerCertificateValidationCallback ==null)
+            {
+                ServicePointManager.ServerCertificateValidationCallback += 
+                    delegate
+                    (
+                        Object obj, 
+                        X509Certificate certificate, 
+                        X509Chain chain, 
+                        SslPolicyErrors errors
+                    )
+                    {
+                        return true;
+                    };
+            }
+        }
+    }
+"@
+    Add-Type $certCallback
+ }
+[ServerCertificateValidationCallback]::Ignore()
+#################################################################
 ################################################
 # Building Zerto API string and invoking API
 ################################################
@@ -136,14 +170,14 @@ $currentowner = ($getowner | select -expandproperty Name)
 $vpgListApiUrl = $baseURL+"vpgs"
 $vpgList = Invoke-RestMethod -Uri $vpgListApiUrl -TimeoutSec 100 -Headers $zertoSessionHeader -ContentType "application/xml"
 # Building VPG array 
-$zertovpgarray = $vpgList.ArrayOfVpgApi.VpgApi | Where-object {$_.VpgName -eq $node1vpgname} | Select-Object VpgName,VpgIdentifier,Status,SubStatus
+$zertovpgarray = $vpgList | Where-object {$_.VpgName -eq $node1vpgname} | Select-Object VpgName,VpgIdentifier,Status,SubStatus
 # Setting the status of the VPG
 $zertovpgName = $zertovpgarray.VpgName
 $zertovpgIdentifier = $zertovpgarray.VpgIdentifier
 $zertovpgStatus = $zertovpgarray.Status
 $zertovpgSubStatus = $zertovpgarray.SubStatus
 # If statement to set pause status
-if ($zertovpgSubStatus -eq "ReplicationPausedUserInitiated")
+if ($zertovpgSubStatus -eq 25)
 {
 $node1paused = $True
 }
@@ -219,5 +253,3 @@ if($node1paused -eq $True)
 $action = $time + " Run on " + $currenthost + " - No action needed. Current active node is " + $currentowner + " and the VPG is " + $nodepausedoutcome
 $action | Out-File -filePath $logFile -Append
 }
-
-
