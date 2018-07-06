@@ -44,12 +44,12 @@
 # Configure the variables below
 ################################################
 # Step 1. Configure the hostname of both nodes in the Microsoft cluster.
-$node1name = "SQLNodeA"
-$node2name = "SQLNodeB"
+$thisNode = "SQLNodeA" # node name of the sql node this script is on
+$otherNode = "SQLNodeB" # node name of the other sql node in the cluster
 # Step 2. Configure exact name of the cluster service running on the Microsoft cluster. If running multiple services specify the master service upon which all other services are dependant on.
 $sqlclustername = "SQL Server (MSSQLSERVER)"
-# Step 3. Configure the name of the VPG in Zerto which is protecting the primary active node. Recommended to not use spaces in the VPG name.
-$node1vpgname = "ClusterNodeA"
+# Step 3. Configure the name of the VPG in Zerto which is protecting the node this script is on. Recommended to not use spaces in the VPG name.
+$thisNodevpgname = "ClusterNodeA" 
 # Step 4. Configure the IP address of the ZVM and the PowerShell login credentials
 $ZVMIP = "172.16.1.20"
 $ZertoUser = "administrator"
@@ -157,7 +157,7 @@ Import-Module Failoverclusters
 $currenthost = hostname
 $now = Get-Date
 $time = $now.ToString("HH:mm:ss")
-$logFile = $loggingfilepath + "\Zerto-ConsistencyLog-" + $node1vpgname + "-" + $now.ToString("yyyy-MM-dd") + ".log"
+$logFile = $loggingfilepath + "\Zerto-ConsistencyLog-" + $thisNodevpgname + "-" + $now.ToString("yyyy-MM-dd") + ".log"
 ################################################
 # Selects the current cluster owner using the Windows Failover Cluster cmdlets
 ################################################
@@ -170,7 +170,7 @@ $currentowner = ($getowner | select -expandproperty Name)
 $vpgListApiUrl = $baseURL+"vpgs"
 $vpgList = Invoke-RestMethod -Uri $vpgListApiUrl -TimeoutSec 100 -Headers $zertoSessionHeader -ContentType "application/xml"
 # Building VPG array 
-$zertovpgarray = $vpgList | Where-object {$_.VpgName -eq $node1vpgname} | Select-Object VpgName,VpgIdentifier,Status,SubStatus
+$zertovpgarray = $vpgList | Where-object {$_.VpgName -eq $thisNodevpgname} | Select-Object VpgName,VpgIdentifier,Status,SubStatus
 # Setting the status of the VPG
 $zertovpgName = $zertovpgarray.VpgName
 $zertovpgIdentifier = $zertovpgarray.VpgIdentifier
@@ -196,25 +196,25 @@ $node1paused = $False
 ################################################
 # Task Group 1 - Node 1 checks if node 1 is paused and the cluster owner
 ################################################
-if (($node1paused -eq $True) -And ($currentowner -eq $node1name))
+if (($node1paused -eq $True) -And ($currentowner -eq $thisNode))
 {
 # Unpausing the VPG
-Resume-ProtectionGroup -ZVMIP $ZVMIP -ZVMPORT $ZVMPowerShellPort -Username $ZertoUser -password $ZertoPassword -VirtualProtectionGroup $node1vpgname -Wait 300 -confirm:$false
+Resume-ProtectionGroup -ZVMIP $ZVMIP -ZVMPORT $ZVMPowerShellPort -Username $ZertoUser -password $ZertoPassword -VirtualProtectionGroup $thisNodevpgname -Wait 300 -confirm:$false
 # Inserting action into the log
-$action = $time + " Run on " + $currenthost + "-" + "Task Group 1 - Resumed VPG - " + $node1vpgname + " - Reason - The VPG is paused yet the primary active node is now " + $node1name + " and so the VPG has been resumed."
+$action = $time + " Run on " + $currenthost + "-" + "Task Group 1 - Resumed VPG - " + $thisNodevpgname + " - Reason - The VPG is paused yet the primary active node is now " + $thisNode + " and so the VPG has been resumed."
 $action | Out-File -filePath $logFile -Append
 # Waiting for pause to finish
 Start-Sleep 10
 # Add checkpoint for visibility in the ZVM
-Set-Checkpoint -ZVMIP $ZVMIP -ZVMPORT $ZVMPowerShellPort -Username $ZertoUser -password $ZertoPassword  -VirtualProtectionGroup $node1vpgname -Wait 300 -confirm:$false -Tag "NOW Cluster Owner - Auto Force Sync Started"
+Set-Checkpoint -ZVMIP $ZVMIP -ZVMPORT $ZVMPowerShellPort -Username $ZertoUser -password $ZertoPassword  -VirtualProtectionGroup $thisNodevpgname -Wait 300 -confirm:$false -Tag "NOW Cluster Owner - Auto Force Sync Started"
 # Inserting action into the log
-$action = $time + " Run on " + $currenthost + "-" + " Task Group 1 - Inserted Checkpoint in VPG - " + $node1vpgname + " - Reason - The VPG is paused yet the primary active node is now " + $node1name + ", Zerto is now about to perform a force sync. The checkpoint indicates when this process started in the journal of changes."
+$action = $time + " Run on " + $currenthost + "-" + " Task Group 1 - Inserted Checkpoint in VPG - " + $thisNodevpgname + " - Reason - The VPG is paused yet the primary active node is now " + $thisNode + ", Zerto is now about to perform a force sync. The checkpoint indicates when this process started in the journal of changes."
 $action | Out-File -filePath $logFile -Append
 Start-Sleep 3
 # Perform delta sync to maintain consistency
-Force-Sync -ZVMIP $ZVMIP -ZVMPORT $ZVMPowerShellPort -Username $ZertoUser -password $ZertoPassword  -VirtualProtectionGroup $node1vpgname -Wait 300 -confirm:$false
+Force-Sync -ZVMIP $ZVMIP -ZVMPORT $ZVMPowerShellPort -Username $ZertoUser -password $ZertoPassword  -VirtualProtectionGroup $thisNodevpgname -Wait 300 -confirm:$false
 # Inserting action into the log
-$action = $time + " Run on " + $currenthost + " Run on " + $currenthost + "-" + " Task Group 1 - Force Sync Initiated on VPG - " + $node1vpgname + " - Reason - The VPG is paused yet the primary active node is now " + $node1name + ", Zerto is has initiated a force sync to get the VM back into a consistent state allowing failover."
+$action = $time + " Run on " + $currenthost + " Run on " + $currenthost + "-" + " Task Group 1 - Force Sync Initiated on VPG - " + $thisNodevpgname + " - Reason - The VPG is paused yet the primary active node is now " + $thisNode + ", Zerto is has initiated a force sync to get the VM back into a consistent state allowing failover."
 $action | Out-File -filePath $logFile -Append
 # Sending notification email
 $EmailMessage = $action
@@ -223,17 +223,17 @@ send-mailmessage -from $emailfrom -to $emailto -subject "MSCS Script Alert" -Bod
 ################################################
 # Task Group 2 - This checks if the node isn't paused and if it isn't the cluster owner
 ################################################
-if (($node1paused -eq $False) -And ($currentowner -eq $node2name))
+if (($node1paused -eq $False) -And ($currentowner -eq $otherNode))
 {
 # Inserting checkpoint for visibility in the ZVM
-Set-Checkpoint -ZVMIP $ZVMIP -ZVMPORT $ZVMPowerShellPort -Username $ZertoUser -password $ZertoPassword  -VirtualProtectionGroup $node1vpgname -Wait 300 -confirm:$false -Tag "NOT Cluster Owner - Auto Paused"
+Set-Checkpoint -ZVMIP $ZVMIP -ZVMPORT $ZVMPowerShellPort -Username $ZertoUser -password $ZertoPassword  -VirtualProtectionGroup $thisNodevpgname -Wait 300 -confirm:$false -Tag "NOT Cluster Owner - Auto Paused"
 # Inserting action into the log
-$action = $time + " Run on " + $currenthost + "-" + " Task Group 2 - Inserted Checkpoint in VPG - " + $node1vpgname + " - Reason - The VPG was not paused, yet the active node is now " + $node2name + ", Zerto is now about to suspend the VPG as it can no longer failover consistently. The checkpoint indicates when this occurred in the journal of changes."
+$action = $time + " Run on " + $currenthost + "-" + " Task Group 2 - Inserted Checkpoint in VPG - " + $thisNodevpgname + " - Reason - The VPG was not paused, yet the active node is now " + $otherNode + ", Zerto is now about to suspend the VPG as it can no longer failover consistently. The checkpoint indicates when this occurred in the journal of changes."
 $action | Out-File -filePath $logFile -Append
 # As node 1 is not the Owner it pauses the VPG 
-Pause-ProtectionGroup -ZVMIP $ZVMIP -ZVMPORT $ZVMPowerShellPort -Username $ZertoUser -password $ZertoPassword -VirtualProtectionGroup $node1vpgname -Wait 300 -confirm:$false
+Pause-ProtectionGroup -ZVMIP $ZVMIP -ZVMPORT $ZVMPowerShellPort -Username $ZertoUser -password $ZertoPassword -VirtualProtectionGroup $thisNodevpgname -Wait 300 -confirm:$false
 # Inserting action into the log
-$action = $time + " Run on " + $currenthost + "-" + " Task Group 2 - Paused VPG - " + $node1vpgname + " - Reason - The VPG was not paused, yet the active node is now " + $node2name + " and so the VPG has been paused."
+$action = $time + " Run on " + $currenthost + "-" + " Task Group 2 - Paused VPG - " + $thisNodevpgname + " - Reason - The VPG was not paused, yet the active node is now " + $otherNode + " and so the VPG has been paused."
 $action | Out-File -filePath $logFile -Append
 # Sending notification email
 $EmailMessage = $action
